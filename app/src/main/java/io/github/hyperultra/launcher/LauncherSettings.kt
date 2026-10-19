@@ -19,8 +19,9 @@ val PRESETS = listOf(
     Preset("Grafito", 0xFF5F6B7A.toInt(), 2),
 )
 
-/** Ajustes persistentes (SharedPreferences) expuestos como estado de Compose. */
+/** Ajustes persistentes expuestos como estado de Compose. */
 class LauncherSettings(context: Context) {
+
     private val sp = context.applicationContext.getSharedPreferences(
         "launcher_settings",
         Context.MODE_PRIVATE
@@ -39,7 +40,7 @@ class LauncherSettings(context: Context) {
     var accent by mutableIntStateOf(sp.getInt("accent", DEFAULT_ACCENT))
         private set
 
-    /** Modo Lite: sin desenfoque ni animaciones. Activado por defecto. */
+    /** Modo Lite activado por defecto. */
     var lite by mutableStateOf(sp.getBoolean("lite", true))
         private set
 
@@ -55,7 +56,7 @@ class LauncherSettings(context: Context) {
     )
         private set
 
-    /** null = dock por defecto (según apps predeterminadas del sistema). */
+    /** null = dock predeterminado del sistema. */
     var dock: List<String>? by mutableStateOf(readDock())
         private set
 
@@ -68,58 +69,132 @@ class LauncherSettings(context: Context) {
         return raw.split("|").filter { it.isNotEmpty() }
     }
 
-    fun updateColumns(v: Int) {
+    fun setColumns(v: Int) {
         columns = v.coerceIn(3, 6)
         sp.edit().putInt("columns", columns).apply()
     }
 
-    fun updateIconDp(v: Int) {
+    fun updateColumns(v: Int) = setColumns(v)
+
+    fun setIconDp(v: Int) {
         iconDp = v.coerceIn(40, 72)
         sp.edit().putInt("icon_dp", iconDp).apply()
     }
 
-    fun updateTheme(v: Int) {
+    fun updateIconDp(v: Int) = setIconDp(v)
+
+    fun setTheme(v: Int) {
         theme = v.coerceIn(0, 2)
         sp.edit().putInt("theme", theme).apply()
     }
 
-    fun updateAccent(v: Int) {
+    fun updateTheme(v: Int) = setTheme(v)
+
+    fun setAccent(v: Int) {
         accent = v
         sp.edit().putInt("accent", v).apply()
     }
 
-    fun updateLite(v: Boolean) {
+    fun updateAccent(v: Int) = setAccent(v)
+
+    fun setLite(v: Boolean) {
         lite = v
         sp.edit().putBoolean("lite", v).apply()
     }
+
+    fun updateLite(v: Boolean) = setLite(v)
 
     fun setLabels(v: Boolean) {
         showLabels = v
         sp.edit().putBoolean("labels", v).apply()
     }
 
-    fun updateSwipeDown(v: Int) {
+    fun setSwipeDown(v: Int) {
         swipeDown = v.coerceIn(0, 1)
         sp.edit().putInt("swipe_down", swipeDown).apply()
     }
 
-    fun updateNote(v: String) {
+    fun updateSwipeDown(v: Int) = setSwipeDown(v)
+
+    fun setNote(v: String) {
         note = v
         sp.edit().putString("note", v).apply()
     }
 
+    fun updateNote(v: String) = setNote(v)
+
     fun applyPreset(p: Preset) {
-        updateAccent(p.color)
-        updateTheme(p.theme)
+        setAccent(p.color)
+        setTheme(p.theme)
     }
 
     fun hide(id: String) {
         hidden = hidden + id
         sp.edit().putStringSet("hidden", hidden).apply()
-        dock?.let { d ->
-            if (id in d) updateDock(d - id)
+
+        dock?.let { currentDock ->
+            if (id in currentDock) {
+                setDock(currentDock - id)
+            }
         }
     }
 
     fun unhide(id: String) {
-        hidden
+        hidden = hidden - id
+        sp.edit().putStringSet("hidden", hidden).apply()
+    }
+
+    fun setDock(ids: List<String>) {
+        dock = ids.toList()
+        sp.edit().putString(
+            "dock",
+            if (ids.isEmpty()) "-" else ids.joinToString("|")
+        ).apply()
+    }
+
+    fun updateDock(ids: List<String>) = setDock(ids)
+
+    fun resetAppearance() {
+        setColumns(4)
+        setIconDp(52)
+        setTheme(0)
+        setAccent(DEFAULT_ACCENT)
+        setLite(true)
+        setLabels(true)
+        setSwipeDown(0)
+
+        dock = null
+        sp.edit().remove("dock").apply()
+    }
+
+    fun exportJson(): String = JSONObject().apply {
+        put("v", 1)
+        put("columns", columns)
+        put("iconDp", iconDp)
+        put("theme", theme)
+        put("accent", accent)
+        put("lite", lite)
+        put("labels", showLabels)
+        put("swipeDown", swipeDown)
+    }.toString()
+
+    fun importJson(text: String): Boolean = try {
+        val obj = JSONObject(text)
+
+        if (obj.optInt("v", 0) != 1) {
+            throw IllegalArgumentException("Versión no soportada")
+        }
+
+        setColumns(obj.optInt("columns", columns))
+        setIconDp(obj.optInt("iconDp", iconDp))
+        setTheme(obj.optInt("theme", theme))
+        setAccent(obj.optInt("accent", accent))
+        setLite(obj.optBoolean("lite", lite))
+        setLabels(obj.optBoolean("labels", showLabels))
+        setSwipeDown(obj.optInt("swipeDown", swipeDown))
+
+        true
+    } catch (_: Exception) {
+        false
+    }
+}
